@@ -18,4 +18,3 @@ $password = getenv('PASSWORD');
 $scraper  = new Scraper($client);
 
 echo $scraper->getStats($email, $password);
-

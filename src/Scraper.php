@@ -9,14 +9,14 @@ use Symfony\Component\DomCrawler\Crawler;
 
 class Scraper
 {
-    protected     $client                    = null;
-    protected     $crawler                   = null;
-    protected     $accountInfo               = [];
-    private       $latestTransactionEpoch    = 0;
-    private       $cachedTransactionHistory  = [];
-    private       $hasCache;
-    public static $LOGIN_URL                 = 'https://icashless.systopiacloud.com';
-    public static $HISTORY_URL               = 'https://icashless.systopiacloud.com/Account/GetTransactions?';
+    protected $client = null;
+    protected $crawler = null;
+    protected $accountInfo = [];
+    private $latestTransactionEpoch = 0;
+    private $cachedTransactionHistory = [];
+    private $hasCache;
+    public static $LOGIN_URL = 'https://icashless.systopiacloud.com';
+    public static $HISTORY_URL = 'https://icashless.systopiacloud.com/Account/GetTransactions?';
     public static $DETAILLED_TRANSACTION_URL = 'https://icashless.systopiacloud.com/account/gettransactiondetails/?';
 
 
@@ -37,11 +37,10 @@ class Scraper
         try {
             $page = $this->client->request('GET', self::$LOGIN_URL);
 
-            $form = $page->selectButton('LOG IN')->form
-            ([
-                 'LoginUser.UserName' => htmlspecialchars($email),
-                 'LoginUser.Password' => htmlspecialchars($password),
-             ]);
+            $form = $page->selectButton('LOG IN')->form([
+                'LoginUser.UserName' => htmlspecialchars($email),
+                'LoginUser.Password' => htmlspecialchars($password),
+            ]);
 
             $account           = $this->client->submit($form);
             $this->accountInfo = $this->getAccountInfo($account);
@@ -60,15 +59,20 @@ class Scraper
         while (true) {
             echo ".";
 
-            $params       = ['pageOffset' => $i++];
-            $cells        = $this->client->request('GET', self::$HISTORY_URL . http_build_query($params))->filter('table > tr');
+            $params = ['pageOffset' => $i++];
+            $cells = $this->client->request('GET', self::$HISTORY_URL .
+                http_build_query($params))->filter('table > tr');
             $transactions = $this->getTransactions($cells);
 
-            if (count($transactions['result']) == 0) break;
+            if (count($transactions['result']) == 0) {
+                break;
+            }
 
             $history = array_merge($history, $transactions['result']);
 
-            if ($transactions['status'] === 'done') break;
+            if ($transactions['status'] === 'done') {
+                break;
+            }
 
             sleep(2); // Be nice to server
         }
@@ -91,15 +95,15 @@ class Scraper
             $tds     = [];
             $crawler = new Crawler($content);
             foreach ($crawler->filter('td') as $i => $node) {
-
                 $key = $node->getAttribute('class');
 
                 if ($key === 'details-cell') {
                     try {
                         $transaction = $node->childNodes->item(1); // Button
                         if ($transaction) {
-                            $params    = ['transactionId' => $transaction->getAttribute('id')];
-                            $details   = $this->client->request('GET', self::$DETAILLED_TRANSACTION_URL . http_build_query($params))->filter('.transdialog')->filter('tr');
+                            $params = ['transactionId' => $transaction->getAttribute('id')];
+                            $details = $this->client->request('GET', self::$DETAILLED_TRANSACTION_URL .
+                                http_build_query($params))->filter('.transdialog')->filter('tr');
                             $tds[$key] = $this->getDetails($details);
                         }
                     } catch (\Exception $e) {
@@ -133,12 +137,10 @@ class Scraper
             $tds     = [];
             $crawler = new Crawler($content);
             foreach ($crawler->filter('td') as $n => $node) {
-
                 $key       = $cellType[$n];
                 $tds[$key] = $this->cleanupEntries($key, trim($node->nodeValue));
             }
             $rows[] = $tds;
-
         }
         // First row is empty
         array_shift($rows);
@@ -149,16 +151,18 @@ class Scraper
 
     private function cleanupEntries($key, $value)
     {
-        if (in_array($key, ['amount-cell', 'price', 'total', 'balance-cell']))
+        if (in_array($key, ['amount-cell', 'price', 'total', 'balance-cell'])) {
             return getPrice($value);
+        }
 
         return $value;
     }
 
     private function getCleanDate(array $cell)
     {
-        if (isset($cell['date-cell']) == false or isset($cell['time-cell']) == false)
+        if (isset($cell['date-cell']) == false or isset($cell['time-cell']) == false) {
             return 0;
+        }
 
         $date = Carbon::createFromFormat('d/m/Y H:i', $cell['date-cell'] . " " . $cell['time-cell']);
         return $date->getTimestamp();
@@ -182,8 +186,10 @@ class Scraper
         $topups         = $transactions->filterHistory(Transactions::$TOPUP_TYPE);
         $totalPurchases = $purchases->getTotal();
         $totalTopups    = $topups->getTotal();
+        $latestTransactionDate = Carbon::createFromTimestamp($purchases->getLatestEpoch())->toDateTimeString();
+        $firstTransactionDate = Carbon::createFromTimestamp($purchases->getEarliestEpoch())->toDateTimeString();
 
-        $r =
+            $r =
             [
                 'current_balance'         => round($totalTopups - $totalPurchases, 2),
                 'total_paid'              => $totalPurchases,
@@ -198,5 +204,4 @@ class Scraper
 
         return json_encode($r, JSON_PRETTY_PRINT) . "\n";
     }
-
 }

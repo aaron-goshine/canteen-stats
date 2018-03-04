@@ -4,7 +4,7 @@
  * @param $string
  * @return string
  */
- function c($string)
+function c($string)
 {
     return trim(preg_replace('/\s\s+/', ' ', $string));
 }
